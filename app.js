@@ -39,7 +39,7 @@ mongoose.connect(dbConn, {
     });
 
 // Middleware
-const whitelist = ["http://localhost:3000/"]
+const whitelist = ["http://localhost:3000/","https://jakes-jobs.netlify.app/"]
 const corsOptions = {
 	credenials: true,
 	origin: (host,cb) => {
