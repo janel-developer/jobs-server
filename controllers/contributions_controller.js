@@ -1,59 +1,86 @@
-const fs = require('fs')
-const contributions = require('../data/contributionData.json')
-const jobs = require('../data/jobData')
-const contributionsFile = './data/contributionData.json'
+const Job = require('../models/job')
+const Contribution = require('../models/contribution')
+
+function sendError(res, message) {
+	res.status(500);
+	res.send(message);
+}
 
 function getContributions(req, res) {
-	res.send(contributions)
+	Contribution.find().exec((error, contributions) => {
+		if(error) {
+			sendError(res, error.message);
+		}
+		else {
+			res.send(contributions);
+		}
+	})
 }
 
 function addContribution(req, res) {
-	if (!req.body)
-		return res.sendStatus(200)
-	req.body.date = new Date()
-	if (validateRecord(req.body)) {
-		const id = getNextId(contributions)
-		req.body._id = id
-		contributions.push(req.body)
-		fs.writeFileSync(contributionsFile, JSON.stringify(contributions))
+	if (!req.body) {
+		return res.sendStatus(200);
 	}
-	res.status(201)
-	res.send(req.body)
-
+	new Contribution(req.body).save((error, contribution) => {
+		if(error) {
+			sendError(res, error.message);
+		}
+		else {
+			res.status(201);
+			res.send(contribution);
+		}
+	})	
 }
 
 function removeContribution(req, res) {
-	if (!req.params.id)
-		return res.sendStatus(200)
-	const updatedContributions = contributions.filter((contribution) => contribution._id !== parseInt(req.params.id) )
-	fs.writeFileSync(contributionsFile, JSON.stringify(updatedContributions))	
-	res.status(204)
-	res.send("Successfully deleted contribution")
+	const id = req.params.id
+	if (!id) {
+		return res.sendStatus(200);
+	}
+	Contribution.findByIdAndRemove(id).exec((error) => {
+		if(error) {
+			sendError(res, error.message);
+		}
+		else {
+			res.status(204)
+			res.send(`Successfully deleted contribution: ${id}`)
+		}
+	})
 }
 
-function getNextId(contributions) {
-	const ids = contributions.map((cont) => cont._id)
-	const id = ids.length > 0 ? parseInt(ids.sort((a,b) => b-a)[0]) : 0
-	return id + 1
+function validateRecord(req, res, next) {
+	if (!req.body) {
+		return res.sendStatus(200);
+	}
+	let today = new Date();
+	today.setHours(0,0,0,0);
+	req.body.date = today;
+	Job.find().exec((error,jobs) => {
+		console.log("got jobs", jobs)
+		if(error) {
+			sendError(res, error.message);
+		}
+		else {
+			const jobNames = jobs.map((job) => job.name)
+			const jobName = req.body.job.name;
+			const jobDate = req.body.date;
+			// check for a valid job
+			const validJob = jobName && jobNames.includes(jobName);
+			// check for a valid date
+			const hasDate = jobDate && jobDate instanceof Date;
+			if(validJob && hasDate) {
+				next();			
+			}
+			else {
+				sendError(res, `Not a valid job: ${jobName}`)
+			}
+		}
+	})
 }
 
-function validateRecord(record) {
-	const job = record.job
-	const date = record.date
-	// check for a valid job name
-	const validJob = job && jobNames().includes(job.name)
-	// check for a valid date
-	const hasDate = date && date instanceof Date
-	return validJob && hasDate
-}
-
-function jobNames() {
-	return jobs.map((job) => job.name)
-}
 module.exports = {
 	getContributions,
 	addContribution,
 	removeContribution,
-	validateRecord,
-	getNextId
+	validateRecord
 }
